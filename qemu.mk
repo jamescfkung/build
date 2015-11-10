@@ -192,12 +192,16 @@ define run-help
 endef
 
 define launch-terminal
-	@nc -z  127.0.0.1 $(1) || \
-	xterm -title $(2) -e $(BASH) -c "$(SOC_TERM_PATH)/soc_term $(1)" &
+       2>/dev/null >/dev/tcp/127.0.0.1/$(1) || \
+       xterm -title $(2) -e $(BASH) -c "$(SOC_TERM_PATH)/soc_term $(1)" &
 endef
 
-define wait-for-ports
-       @while ! nc -z 127.0.0.1 $(1) || ! nc -z 127.0.0.1 $(2); do sleep 1; done
+define wait-for-port
+       @while ! 2>/dev/null >/dev/tcp/127.0.0.1/$(1); \
+       do \
+	      echo "Wait for port $(1) ready..."; \
+	      sleep 1; \
+       done
 endef
 
 .PHONY: run
@@ -210,7 +214,8 @@ run-only:
 	$(call run-help)
 	$(call launch-terminal,54320,"Normal World")
 	$(call launch-terminal,54321,"Secure World")
-	$(call wait-for-ports,54320,54321)
+	$(call wait-for-port,54320)
+	$(call wait-for-port,54321)
 	$(QEMU_PATH)/arm-softmmu/qemu-system-arm \
 		-nographic \
 		-serial tcp:localhost:54320 -serial tcp:localhost:54321 \
