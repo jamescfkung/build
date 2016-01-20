@@ -24,6 +24,8 @@ OPTEE_LINUXDRIVER_PATH		?= $(ROOT)/optee_linuxdriver
 OPTEE_TEST_PATH			?= $(ROOT)/optee_test
 OPTEE_TEST_OUT_PATH 		?= $(ROOT)/optee_test/out
 
+TRUSTY_OS_PATH			?= $(ROOT)/trusty_os
+
 CCACHE ?= $(shell which ccache) # Don't remove this comment (space is needed)
 
 ################################################################################
@@ -108,6 +110,14 @@ edk2-clean-common:
 	$(call edk2-call) clean && \
 	$(MAKE) -j1 -C $(EDK2_PATH)/BaseTools clean && \
 	rm -f $(EDK2_PATH)/Conf/target.txt
+
+################################################################################
+# Trusty
+################################################################################
+TRUSTY_OS_COMMON_FLAGS ?= ARCH_arm_TOOLCHAIN_PREFIX=$(TRUSTY_CROSS_COMPILE)
+
+trusty-os-common:
+	$(MAKE) -C $(TRUSTY_OS_PATH) $(TRUSTY_OS_COMMON_FLAGS)
 
 ################################################################################
 # OP-TEE

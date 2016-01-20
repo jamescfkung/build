@@ -3,6 +3,7 @@
 ################################################################################
 # Mandatory definition to use common.mk
 ################################################################################
+TRUSTY_CROSS_COMPILE		?= "$(TRUSTY_OS_PATH)/prebuilts/gcc/linux-x86/arm/arm-eabi-4.8/bin/arm-eabi-"
 ifneq ($(CROSS_COMPILE),)
 CROSS_COMPILE_NS_USER		?= "$(CROSS_COMPILE)"
 CROSS_COMPILE_NS_KERNEL		?= "$(CROSS_COMPILE)"
@@ -17,6 +18,8 @@ endif
 OPTEE_OS_BIN			?= $(OPTEE_OS_PATH)/out/arm-plat-vexpress/core/tee.bin
 OPTEE_OS_TA_DEV_KIT_DIR		?= $(OPTEE_OS_PATH)/out/arm-plat-vexpress/export-ta_arm32
 
+TRUSTY_PROJECT			?= vexpress-a15-trusty
+TRUSTY_OS_BIN			?= $(TRUSTY_OS_PATH)/build-$(TRUSTY_PROJECT)/lk.bin
 ################################################################################
 # Paths to git projects and various binaries
 ################################################################################
@@ -31,9 +34,8 @@ DEBUG = 1
 # Targets
 ################################################################################
 all: bios-qemu qemu soc-term
-all-clean: bios-qemu-clean busybox-clean linux-clean optee-os-clean \
-	optee-client-clean optee-linuxdriver-clean qemu-clean soc-term-clean \
-	check-clean
+all-clean: bios-qemu-clean busybox-clean linux-clean \
+	qemu-clean soc-term-clean check-clean
 
 -include toolchain.mk
 
@@ -46,11 +48,12 @@ define bios-qemu-common
 		O=$(ROOT)/out/bios-qemu \
 		BIOS_NSEC_BLOB=$(LINUX_PATH)/arch/arm/boot/zImage \
 		BIOS_NSEC_ROOTFS=$(GEN_ROOTFS_PATH)/filesystem.cpio.gz \
-		BIOS_SECURE_BLOB=$(OPTEE_OS_BIN) \
-		PLATFORM_FLAVOR=virt
+		BIOS_SECURE_BLOB=$(TRUSTY_OS_BIN) \
+		BIOS_NSEC_DTB=$(LINUX_PATH)/arch/arm/boot/dts/vexpress-v2p-ca15-tc1.dtb
+		PLATFORM_FLAVOR=vexpress
 endef
 
-bios-qemu: update_rootfs optee-os
+bios-qemu: update_rootfs trusty-os
 	$(call bios-qemu-common)
 
 bios-qemu-clean:
@@ -101,6 +104,12 @@ LINUX_CLEANER_COMMON_FLAGS += ARCH=arm
 linux-cleaner: linux-cleaner-common
 
 ################################################################################
+# Trusty
+################################################################################
+TRUSTY_OS_COMMON_FLAGS += PROJECT=$(TRUSTY_PROJECT)
+trusty-os: trusty-os-common
+
+################################################################################
 # OP-TEE
 ################################################################################
 OPTEE_OS_COMMON_FLAGS += PLATFORM=vexpress-qemu_virt
@@ -144,29 +153,30 @@ xtest-patch: xtest-patch-common
 # Root FS
 ################################################################################
 .PHONY: filelist-tee
-filelist-tee: xtest
-	@echo "# xtest / optee_test" > $(GEN_ROOTFS_FILELIST)
-	@find $(OPTEE_TEST_OUT_PATH) -type f -name "xtest" | sed 's/\(.*\)/file \/bin\/xtest \1 755 0 0/g' >> $(GEN_ROOTFS_FILELIST)
-	@echo "# TAs" >> $(GEN_ROOTFS_FILELIST)
-	@echo "dir /lib/optee_armtz 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@find $(OPTEE_TEST_OUT_PATH) -name "*.ta" | \
-		sed 's/\(.*\)\/\(.*\)/file \/lib\/optee_armtz\/\2 \1\/\2 444 0 0/g' >> $(GEN_ROOTFS_FILELIST)
-	@echo "# Secure storage dig" >> $(GEN_ROOTFS_FILELIST)
-	@echo "dir /data 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@echo "dir /data/tee 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@echo "# OP-TEE device" >> $(GEN_ROOTFS_FILELIST)
-	@echo "dir /lib/modules 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@echo "dir /lib/modules/$(call KERNEL_VERSION) 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@echo "file /lib/modules/$(call KERNEL_VERSION)/optee.ko $(OPTEE_LINUXDRIVER_PATH)/core/optee.ko 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@echo "file /lib/modules/$(call KERNEL_VERSION)/optee_armtz.ko $(OPTEE_LINUXDRIVER_PATH)/armtz/optee_armtz.ko 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@echo "# OP-TEE Client" >> $(GEN_ROOTFS_FILELIST)
-	@echo "file /bin/tee-supplicant $(OPTEE_CLIENT_EXPORT)/bin/tee-supplicant 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@echo "dir /lib/arm-linux-gnueabihf 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@echo "file /lib/arm-linux-gnueabihf/libteec.so.1.0 $(OPTEE_CLIENT_EXPORT)/lib/libteec.so.1.0 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@echo "slink /lib/arm-linux-gnueabihf/libteec.so.1 libteec.so.1.0 755 0 0" >> $(GEN_ROOTFS_FILELIST)
-	@echo "slink /lib/arm-linux-gnueabihf/libteec.so libteec.so.1 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+filelist-tee:
+	@echo "# trusty ipc unittest" > $(GEN_ROOTFS_FILELIST)
+#	@echo "# xtest / optee_test" > $(GEN_ROOTFS_FILELIST)
+#	@find $(OPTEE_TEST_OUT_PATH) -type f -name "xtest" | sed 's/\(.*\)/file \/bin\/xtest \1 755 0 0/g' >> $(GEN_ROOTFS_FILELIST)
+#	@echo "# TAs" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "dir /lib/optee_armtz 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@find $(OPTEE_TEST_OUT_PATH) -name "*.ta" | \
+#		sed 's/\(.*\)\/\(.*\)/file \/lib\/optee_armtz\/\2 \1\/\2 444 0 0/g' >> $(GEN_ROOTFS_FILELIST)
+#	@echo "# Secure storage dig" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "dir /data 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "dir /data/tee 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "# OP-TEE device" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "dir /lib/modules 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "dir /lib/modules/$(call KERNEL_VERSION) 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "file /lib/modules/$(call KERNEL_VERSION)/optee.ko $(OPTEE_LINUXDRIVER_PATH)/core/optee.ko 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "file /lib/modules/$(call KERNEL_VERSION)/optee_armtz.ko $(OPTEE_LINUXDRIVER_PATH)/armtz/optee_armtz.ko 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "# OP-TEE Client" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "file /bin/tee-supplicant $(OPTEE_CLIENT_EXPORT)/bin/tee-supplicant 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "dir /lib/arm-linux-gnueabihf 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "file /lib/arm-linux-gnueabihf/libteec.so.1.0 $(OPTEE_CLIENT_EXPORT)/lib/libteec.so.1.0 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "slink /lib/arm-linux-gnueabihf/libteec.so.1 libteec.so.1.0 755 0 0" >> $(GEN_ROOTFS_FILELIST)
+#	@echo "slink /lib/arm-linux-gnueabihf/libteec.so libteec.so.1 755 0 0" >> $(GEN_ROOTFS_FILELIST)
 
-update_rootfs: busybox optee-client optee-linuxdriver filelist-tee
+update_rootfs: busybox filelist-tee
 	cat $(GEN_ROOTFS_PATH)/filelist-final.txt $(GEN_ROOTFS_PATH)/filelist-tee.txt > $(GEN_ROOTFS_PATH)/filelist.tmp
 	cd $(GEN_ROOTFS_PATH); \
 		$(LINUX_PATH)/usr/gen_init_cpio $(GEN_ROOTFS_PATH)/filelist.tmp | gzip > $(GEN_ROOTFS_PATH)/filesystem.cpio.gz
@@ -180,15 +190,6 @@ define run-help
 	@echo Start execution with either a \'c\' followed by \<enter\> in the QEMU console or
 	@echo attach a debugger and continue from there.
 	@echo
-	@echo To run xtest paste the following on the serial 0 prompt
-	@echo modprobe optee_armtz
-	@echo sleep 0.1
-	@echo tee-supplicant\&
-	@echo sleep 0.1
-	@echo xtest
-	@echo
-	@echo To run a single test case replace the xtest command with for instance
-	@echo xtest 2001
 endef
 
 define launch-terminal
@@ -219,7 +220,7 @@ run-only:
 	$(QEMU_PATH)/arm-softmmu/qemu-system-arm \
 		-nographic \
 		-serial tcp:localhost:54320 -serial tcp:localhost:54321 \
-		-s -S -machine virt -machine secure=on -cpu cortex-a15 \
+		-s -S -machine vexpress-a15 -machine secure=on -cpu cortex-a15\
 		-m 1057 \
 		-bios $(ROOT)/out/bios-qemu/bios.bin $(QEMU_EXTRA_ARGS)
 
